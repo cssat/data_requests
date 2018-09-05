@@ -1,0 +1,40 @@
+
+CREATE TEMP TABLE sw_users AS
+
+SELECT u.id
+	,u."createdAt" AS user_created
+	,us."createdAt" AS session_created
+FROM staging."Users" AS u
+LEFT JOIN staging."UserSessions" AS us ON u.id = us."userId"
+	AND us."createdAt"::DATE > '2017-12-31'
+WHERE "organizationId" = 21
+	AND NOT password IS NULL
+	AND STATE = 'approved'
+	AND u."deletedAt" IS NULL
+	AND u."disabledAt" IS NULL;
+	
+-- Grouping by number of times individual has accessed oliver this year
+
+SELECT use AS "Accessing Oliver"
+	,COUNT(use) "Count of SW Users"
+FROM (
+	SELECT id
+		,CASE 
+			WHEN COUNT(session_created) = 0
+				THEN '0'
+			WHEN COUNT(session_created) BETWEEN 1
+					AND 10
+				THEN '1 to 10'
+			WHEN COUNT(session_created) > 10
+				THEN 'Greater then 10'
+			END AS use
+	FROM sw_users
+	GROUP BY id
+	) AS use
+GROUP BY use
+ORDER BY use;
+
+DROP TABLE sw_users;
+ 
+ 
+ 
