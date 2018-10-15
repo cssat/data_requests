@@ -1,0 +1,198 @@
+---
+title: "Untitled"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(Warning = FALSE)
+
+```
+
+```{r packages}
+
+library(odbc)
+library(DBI)
+library(ggplot2)
+library(dplyr)
+
+```
+
+```{r connection}
+
+con <- dbConnect(odbc(), "POC")
+
+```
+
+```{r data}
+
+dat <-
+  dbGetQuery(con, "SELECT [rptid]
+	,[chid]
+	,[rptcnty]
+	,[rptdt]
+	,[rptdtyr]
+	,[chage]
+	,[chsex]
+	,CASE 
+		WHEN [chracai] = 1
+			AND ([chracas] + [chracbl] + [chracnh] + [chracnh] + [chracwh] = 0)
+			THEN 1
+		WHEN [chracas] = 1
+			AND ([chracai] + [chracbl] + [chracnh] + [chracnh] + [chracwh] = 0)
+			THEN 2
+		WHEN [chracbl] = 1
+			AND ([chracai] + [chracas] + [chracnh] + [chracnh] + [chracwh] = 0)
+			THEN 3
+		WHEN [chracnh] = 1
+			AND ([chracai] + [chracas] + [chracbl] + [chracnh] + [chracwh] = 0)
+			THEN 4
+		WHEN [chracwh] = 1
+			AND ([chracai] + [chracas] + [chracbl] + [chracnh] + [chracnh] = 0)
+			THEN 5
+		WHEN [chracai] IS NULL
+			AND [chracas] IS NULL
+			AND [chracbl] IS NULL
+			AND [chracnh] IS NULL
+			AND [chracnh] IS NULL
+			AND [chracwh] IS NULL
+			THEN 7
+		WHEN [chracai] + [chracas] + [chracbl] + [chracnh] + [chracnh] + [chracwh] > 1
+			THEN 8
+		END AS raceeth
+	,[chracai]
+	,[chracas]
+	,[chracbl]
+	,[chracnh]
+	,[chracnh]
+	,[chracwh]
+	,[chracud]
+	,[cethn]
+	,[chmil]
+	,[chprior]
+	,[chmal1]
+	,[mal1lev]
+	,[chmal2]
+	,[mal2lev]
+	,[chmal3]
+	,[mal3lev]
+	,[chmal4]
+	,[mal4lev]
+FROM (
+	SELECT [rptid]
+		,[chid]
+		,[rptcnty]
+		,[rptdt]
+		,YEAR(rptdt) AS [rptdtyr]
+		,[chage]
+		,CASE 
+			WHEN [chsex] = 1
+				THEN 'male'
+			WHEN [chsex] = 2
+				THEN 'female'
+			END AS [chsex]
+		,CASE 
+			WHEN [chracai] = 1
+				THEN 1
+			WHEN [chracai] = 2
+				THEN 0
+			END AS [chracai]
+		,CASE 
+			WHEN [chracas] = 1
+				THEN 1
+			WHEN [chracas] = 2
+				THEN 0
+			END AS [chracas]
+		,CASE 
+			WHEN [chracbl] = 1
+				THEN 1
+			WHEN [chracbl] = 2
+				THEN 0
+			END AS [chracbl]
+		,CASE 
+			WHEN [chracnh] = 1
+				THEN 1
+			WHEN [chracnh] = 2
+				THEN 0
+			END AS [chracnh]
+		,CASE 
+			WHEN [chracwh] = 1
+				THEN 1
+			WHEN [chracwh] = 2
+				THEN 0
+			END AS [chracwh]
+		,CASE 
+			WHEN [chracud] = 1
+				THEN 1
+			WHEN [chracud] = 2
+				THEN 0
+			END AS [chracud]
+		--,CASE 
+		--	WHEN [cethn] = 1
+		--		THEN 1
+		--	WHEN [cethn] = 2
+		--		THEN 0
+		--	END AS [cethn]
+		,[cethn]
+		,CASE 
+			WHEN [chmil] = 1
+				THEN 1
+			WHEN [chmil] = 2
+				THEN 0
+			END [chmil]
+		,[chprior]
+		,[chmal1]
+		,[mal1lev]
+		,[chmal2]
+		,[mal2lev]
+		,[chmal3]
+		,[mal3lev]
+		,[chmal4]
+		,[mal4lev]
+	FROM [CA_ODS].[ndacan].[ncands_2002_2016]
+	WHERE [staterr] = 'WA'
+		AND YEAR([rptdt]) BETWEEN 2013
+			AND 2015
+		AND [rptcnty] = 53
+		AND [chage] <= 6
+	) AS dat
+  ")
+
+maltreatment_type <-
+  dbGetQuery(con, "SELECT [cd_mal]
+      ,[tx_mal]
+  FROM [CA_ODS].[annual_report].[ref_ncands_mal]")
+
+maltreatment_disposition <-
+  dbGetQuery(con, "SELECT [cd_mal_lev]
+      ,[tx_mal_lev]
+  FROM [CA_ODS].[annual_report].[ref_ncands_mal_lev]")
+
+```
+
+
+
+
+```{r}
+
+# aggregate data over observation period
+
+total_children <- length(unique(dat$chid))
+
+total_reports <- NROW(dat)
+
+total_investigations <- length(unique(dat$rptid))
+
+# Graphs
+
+ages_by_year <- 
+  ggplot(dat, aes(x = chage)) +
+  geom_bar() +
+  facet_grid(~rptdtyr)
+
+
+```
+
+The data for this request comes from the NDCANDS child file. You can find more information on [NCANDS here](https://www.ndacan.cornell.edu/datasets/pdfs_user_guides/Dataset210NCANDSChildFileUserGuideFY2016.pdf) and a [code book here](https://www.ndacan.cornell.edu/datasets/pdfs_user_guides/NCANDSChildFileCodebook.pdf). NCANDS submissions are based around the Federal Fiscal Year (2016) with the most recent submission from FFY 2016. Because states don't include information from open investigations, the last few months of each file is missing a siginifcant number of reports. This data will be included in subseqent reports but makes the most recent data set incomplete. As a result, the data included in this request is from between calendar year 2013 through 2015.
